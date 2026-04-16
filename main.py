@@ -3,25 +3,87 @@
 
 #!pip install pulp matplotlib
 
+import os
+import random
 from pulp import LpProblem, LpVariable, LpMinimize, LpInteger, value
+import matplotlib
+matplotlib.use('Agg')  # для роботи без дисплею (Docker)
 import matplotlib.pyplot as plt
 from itertools import combinations_with_replacement
+
+# 🔹 Змінні середовища (додано для Docker / ЛР2)
+STUDENT_NAME = os.environ.get("STUDENT_NAME", "Жарук Данил, Холудієв Денис")
+GROUP        = os.environ.get("GROUP", "АІ-235")
+MODE         = os.environ.get("MODE", "eco")
+
+print("=" * 50)
+print(f"👤 Студент : {STUDENT_NAME}")
+print(f"🎓 Група   : {GROUP}")
+print(f"⚙️  Режим   : {MODE}")
+print("=" * 50)
 
 # 🔹 Розміри деталей
 sizes = {
     "XS": 80,
-    "S": 90,
-    "M": 100,
-    "L": 110,
+    "S":  90,
+    "M":  100,
+    "L":  110,
     "XL": 120
 }
 
-# 🔹 Введення довжини рулону
-print("Введіть довжину рулону (см):")
-roll_length = int(input("Довжина рулону: "))
+# 🔹 Довжина рулону:
+#    - якщо запущено в Docker (немає TTY) або задано ENV → беремо з ENV або рандом
+#    - якщо запущено локально з терміналом → запитуємо через input() як раніше
+ROLL_LENGTH_ENV = os.environ.get("ROLL_LENGTH")
+
+if ROLL_LENGTH_ENV:
+    # задано явно через -e ROLL_LENGTH=...
+    roll_length = int(ROLL_LENGTH_ENV)
+    print(f"\n📏 Довжина рулону (з ENV): {roll_length} см")
+elif not os.isatty(0):
+    # Docker / неінтерактивний режим → рандомна довжина
+    # Вибираємо значення, кратне НСК(80,90,100,110,120)=3960,
+    # але щоб модель мала хоч якісь шаблони — беремо суми з допустимого набору
+    candidates = []
+    for r in range(1, 8):
+        for combo in combinations_with_replacement(sizes.keys(), r):
+            s = sum(sizes[k] for k in combo)
+            if 200 <= s <= 800:
+                candidates.append(s)
+    candidates = sorted(set(candidates))
+    roll_length = random.choice(candidates)
+    print(f"\n📏 Довжина рулону (рандом, Docker): {roll_length} см")
+else:
+    # Локальний запуск — оригінальна поведінка
+    print("\nВведіть довжину рулону (см):")
+    roll_length = int(input("Довжина рулону: "))
+
+# 🔹 Попит:
+#    - якщо задано ENV → беремо з ENV
+#    - якщо неінтерактивний режим → рандомний попит
+#    - якщо локально → input() як раніше
+DEMAND_ENV = os.environ.get("DEMAND_XS")  # перевіряємо лише одну як індикатор
+
+if DEMAND_ENV is not None:
+    demand = {
+        "XS": int(os.environ.get("DEMAND_XS", "5")),
+        "S":  int(os.environ.get("DEMAND_S",  "10")),
+        "M":  int(os.environ.get("DEMAND_M",  "15")),
+        "L":  int(os.environ.get("DEMAND_L",  "10")),
+        "XL": int(os.environ.get("DEMAND_XL", "5")),
+    }
+    print(f"\n📦 Виробничий попит (з ENV): {demand}")
+elif not os.isatty(0):
+    demand = {size: random.randint(3, 20) for size in sizes}
+    print(f"\n📦 Виробничий попит (рандом, Docker): {demand}")
+else:
+    print("\n📦 Введіть виробничий попит:")
+    demand = {}
+    for size in sizes:
+        demand[size] = int(input(f"{size}: "))
 
 # 🔹 Генерація шаблонів без залишків
-max_parts = roll_length // min(sizes.values())  # максимальна кількість деталей в одному рулоні
+max_parts = roll_length // min(sizes.values())
 generated_templates = {}
 template_id = 1
 
@@ -41,10 +103,19 @@ if not generated_templates:
     print("💡 Спробуйте змінити довжину рулону або дозволити шаблони з невеликим залишком.")
     exit()
 
+# 🔹 Введення / автовибір недоступних шаблонів
+EXCLUDED_ENV = os.environ.get("EXCLUDED_TEMPLATES")
 
-# 🔹 Введення недоступних шаблонів
-print("\n🚫 Вкажіть шаблони, які недоступні (наприклад: T2,T5), або залиште порожнім:")
-excluded_input = input("Недоступні шаблони: ").strip()
+if EXCLUDED_ENV is not None:
+    excluded_input = EXCLUDED_ENV
+    print(f"\n🚫 Недоступні шаблони (з ENV): {excluded_input or 'немає'}")
+elif not os.isatty(0):
+    excluded_input = ""
+    print("\n🚫 Недоступні шаблони (Docker): не задано")
+else:
+    print("\n🚫 Вкажіть шаблони, які недоступні (наприклад: T2,T5), або залиште порожнім:")
+    excluded_input = input("Недоступні шаблони: ").strip()
+
 excluded_templates = set(excluded_input.split(",")) if excluded_input else set()
 excluded_templates = {name.strip() for name in excluded_templates}
 
@@ -58,13 +129,7 @@ filtered_templates = {
 if not filtered_templates:
     print("\n⚠️ Усі шаблони виключено. Оптимізація неможлива.")
     import sys
-    sys.exit()  # ⛔ Зупинка програми
-
-# 🔹 Введення попиту
-print("\n📦 Введіть виробничий попит:")
-demand = {}
-for size in sizes:
-    demand[size] = int(input(f"{size}: "))
+    sys.exit()
 
 # 🔹 Створення моделі
 model = LpProblem("Optimal_Cutting_Plan", LpMinimize)
@@ -79,9 +144,10 @@ model += sum(variables[name] for name in filtered_templates), "Total_Rolls"
 
 # 🔹 Обмеження на попит
 for size in sizes:
-    model += sum(variables[name] * filtered_templates[name].count(size) for name in filtered_templates) >= demand[size], f"{size}_demand"
+    model += sum(variables[name] * filtered_templates[name].count(size)
+                 for name in filtered_templates) >= demand[size], f"{size}_demand"
 
-# 🔹 Розв’язання
+# 🔹 Розв'язання
 model.solve()
 
 # 🔹 Вивід результатів
@@ -89,27 +155,42 @@ print("\n📊 Оптимальний розподіл шаблонів:")
 used_templates = {}
 for name in filtered_templates:
     count = variables[name].varValue
-    if count > 0:
+    if count and count > 0:
         used_templates[name] = count
-        print(f"{name} ({'+'.join(filtered_templates[name])}): {count} рулонів")
-print(f"Загальна кількість рулонів: {value(model.objective)}")
+        print(f"{name} ({'+'.join(filtered_templates[name])}): {int(count)} рулонів")
 
-# 🔹 Візуалізація
-labels = [f"{name} ({'+'.join(filtered_templates[name])})" for name in used_templates]
-values = [used_templates[name] for name in used_templates]
-colors = plt.cm.tab20.colors  # набір кольорів
+total_rolls = int(value(model.objective))
+print(f"✅ Загальна кількість рулонів: {total_rolls}")
 
-plt.figure(figsize=(12, 6))
-bars = plt.bar(labels, values, color=colors[:len(labels)])
-plt.title('Оптимальний розподіл шаблонів розкрою')
-plt.ylabel('Кількість рулонів')
-plt.xlabel('Шаблони')
-plt.xticks(rotation=45, ha='right')
-plt.grid(axis='y', linestyle='--', alpha=0.7)
+# 🔹 Візуалізація (збережено оригінальну логіку + збереження у файл для Docker)
+if used_templates:
+    labels = [f"{name} ({'+'.join(filtered_templates[name])})" for name in used_templates]
+    values_list = [used_templates[name] for name in used_templates]
+    colors = plt.cm.tab20.colors
 
-for bar in bars:
-    yval = bar.get_height()
-    plt.text(bar.get_x() + bar.get_width()/2, yval + 0.5, int(yval), ha='center', va='bottom')
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(labels, values_list, color=colors[:len(labels)])
+    plt.title(f'Оптимальний розподіл шаблонів розкрою\n'
+              f'Студент: {STUDENT_NAME} | Група: {GROUP} | Режим: {MODE}')
+    plt.ylabel('Кількість рулонів')
+    plt.xlabel('Шаблони')
+    plt.xticks(rotation=45, ha='right')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-plt.tight_layout()
-plt.show()
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, yval + 0.5,
+                 int(yval), ha='center', va='bottom')
+
+    plt.tight_layout()
+
+    # Зберігаємо діаграму у файл (працює і локально, і в Docker)
+    output_path = os.environ.get("CHART_OUTPUT", "chart.png")
+    plt.savefig(output_path, dpi=150)
+    print(f"\n📈 Діаграму збережено: {output_path}")
+
+    # Показуємо діаграму лише якщо є дисплей (локальний запуск)
+    if os.isatty(0):
+        plt.show()
+else:
+    print("\n⚠️ Немає даних для побудови діаграми.")
