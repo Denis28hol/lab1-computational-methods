@@ -1,5 +1,5 @@
 # Модель: Математичне моделювання оптимального розкрою рулонної тканини для виробництва футболок
-# Автор: Жарук Данил, група АІ-235
+# Автор: Жарук Данил,Холудієв Денис, група АІ-235
 
 from flask import Flask, request, jsonify
 from pulp import LpProblem, LpVariable, LpMinimize, LpInteger, value
