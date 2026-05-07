@@ -2,7 +2,7 @@
 # Автор: Жарук Данил, Холудієв Денис, група АІ-235
 
 #!pip install pulp matplotlib
-
+ 
 import os
 import random
 from pulp import LpProblem, LpVariable, LpMinimize, LpInteger, value
