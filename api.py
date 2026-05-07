@@ -4,7 +4,7 @@
 from flask import Flask, request, jsonify
 from pulp import LpProblem, LpVariable, LpMinimize, LpInteger, value
 from itertools import combinations_with_replacement
-
+ 
 app = Flask(__name__)
 
 SIZES = {
