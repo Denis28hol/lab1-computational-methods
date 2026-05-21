@@ -1,5 +1,6 @@
 flask
 pulp
+gunicorn
 matplotlib
 pytest
 flake8
