@@ -1,13 +1,13 @@
-# Лабораторна робота №3
+# Лабораторна робота №7
 
 ## Тема 
-Git та Linux CLI
+Хмарне розгортання DevOps-сервісу
  
 ## Модель
 Математичне моделювання оптимального розкрою рулонної тканини для виробництва футболок (5 семестр)
 
 ## Автор
-Жарук Данил, Холудієв Денис, група АІ-235
+Холудієв Денис,Жарук Данил, група АІ-235
 
 ## Опис
 У роботі реалізовано математичну модель оптимального розкрою рулонної тканини для виробництва футболок різних розмірів.
@@ -27,3 +27,20 @@ pip install pulp matplotlib
 python main.py
 ```
 
+## Платформа
+Render (Free tier) — Manual Docker deployment
+
+## Публічний URL
+https://devops-235-kholudiev.onrender.com
+
+## Перевірка API
+https://devops-235-kholudiev.onrender.com/calculate?roll_length=360&XS=2&S=3&M=5&L=2&XL=1
+
+## Як запустити локально
+docker build -t devops-api .
+docker run -p 5000:5000 devops-api
+
+## Опис
+Сервіс розгорнуто у хмарному середовищі Render через Docker контейнер.
+API доступний через HTTPS і приймає GET/POST запити на endpoint /calculate.
+Debug mode вимкнено, використовуються environment variables.
